@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#7c3aed">
+  <meta name="description" content="Painel pessoal para organizar anotações, links, fotos e progresso no curso de programação.">
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="style.css">
+  <title>DevClub • Meu Painel</title>
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-icon">DC</div>
+        <div>
+          <strong>DevClub</strong>
+          <span>Meu Painel</span>
+        </div>
+      </div>
+
+      <nav class="nav">
+        <button class="nav-item active" data-page="inicio">⌂ <span>Início</span></button>
+        <button class="nav-item" data-page="anotacoes">▤ <span>Anotações</span></button>
+        <button class="nav-item" data-page="fotos">▧ <span>Fotos</span></button>
+        <button class="nav-item" data-page="progresso">◔ <span>Progresso</span></button>
+      </nav>
+
+      <div class="sidebar-bottom">
+        <button id="installBtn" class="install-btn" hidden>⇩ Instalar aplicativo</button>
+        <button id="themeBtn" class="theme-btn">☾ Alternar tema</button>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <button id="menuBtn" class="mobile-menu" aria-label="Abrir menu">☰</button>
+        <div>
+          <p class="eyebrow">ÁREA DE ESTUDOS</p>
+          <h1 id="pageTitle">Meu painel</h1>
+        </div>
+        <div class="top-actions">
+          <span id="saveStatus" class="save-status">Salvo localmente</span>
+        </div>
+      </header>
+
+      <section id="inicio" class="page active-page">
+        <div class="hero">
+          <div>
+            <span class="badge">DEVCLUB • RODOLFO MORI</span>
+            <h2>Seu centro de estudos,<br><span>organizado em um só lugar.</span></h2>
+            <p>Guarde conceitos, comandos, links, prints e seu progresso sem depender da internet.</p>
+          </div>
+          <div class="hero-code">
+            <span>&lt;/&gt;</span>
+            <small>LEARN • BUILD • REPEAT</small>
+          </div>
+        </div>
+
+        <div class="stats-grid">
+          <article class="stat-card"><span>Anotações</span><strong id="statNotes">0</strong><small>itens salvos</small></article>
+          <article class="stat-card"><span>Fotos</span><strong id="statPhotos">0</strong><small>imagens salvas</small></article>
+          <article class="stat-card"><span>Progresso</span><strong id="statProgress">0%</strong><small>do curso</small></article>
+          <article class="stat-card"><span>Status</span><strong class="online-dot">●</strong><small>dados no aparelho</small></article>
+        </div>
+
+        <div class="dashboard-grid">
+          <article class="card quick-card">
+            <div class="card-heading"><div><span class="section-label">ATENÇÃO</span><h3>Ticket de estudo</h3></div><span class="ticket-icon">#</span></div>
+            <p>Registre aqui uma dúvida ou assunto que você precisa revisar.</p>
+            <form id="ticketForm">
+              <input id="ticketTitle" required placeholder="Ex.: Como funciona o Flexbox?">
+              <select id="ticketPriority">
+                <option value="Alta">🔴 Alta</option>
+                <option value="Média" selected>🟡 Média</option>
+                <option value="Baixa">🟢 Baixa</option>
+              </select>
+              <textarea id="ticketText" rows="3" placeholder="Escreva o que precisa entender..."></textarea>
+              <button class="primary-btn" type="submit">+ Criar ticket</button>
+            </form>
+          </article>
+
+          <article class="card">
+            <div class="card-heading"><div><span class="section-label">RECENTES</span><h3>Últimos tickets</h3></div></div>
+            <div id="ticketList" class="ticket-list">
+              <div class="empty">Nenhum ticket ainda. Crie o primeiro ao lado.</div>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section id="anotacoes" class="page">
+        <div class="page-intro">
+          <div><span class="section-label">BASE DE CONHECIMENTO</span><h2>Anotações</h2><p>Salve aquilo que você não quer esquecer.</p></div>
+          <button id="newNoteBtn" class="primary-btn">+ Nova anotação</button>
+        </div>
+        <div id="noteFormWrap" class="card form-card hidden">
+          <form id="noteForm">
+            <div class="form-row"><input id="noteTitle" required placeholder="Título da anotação"><select id="noteCategory"><option>HTML</option><option>CSS</option><option>JavaScript</option><option>Git/GitHub</option><option>Outros</option></select></div>
+            <textarea id="noteText" required rows="7" placeholder="Digite seu resumo, comandos, exemplos..."></textarea>
+            <div class="form-actions"><button type="button" id="cancelNote" class="secondary-btn">Cancelar</button><button class="primary-btn">Salvar anotação</button></div>
+          </form>
+        </div>
+        <div id="notesGrid" class="notes-grid"></div>
+      </section>
+
+      <section id="fotos" class="page">
+        <div class="page-intro">
+          <div><span class="section-label">REFERÊNCIAS VISUAIS</span><h2>Fotos e prints</h2><p>Guarde prints de aulas, códigos e exercícios.</p></div>
+          <label class="primary-btn upload-btn">+ Adicionar fotos<input id="photoInput" type="file" accept="image/*" multiple hidden></label>
+        </div>
+        <div class="card upload-area" id="dropArea">
+          <div class="upload-icon">↑</div><h3>Arraste imagens para cá</h3><p>ou use o botão acima. As imagens ficam salvas no armazenamento do navegador.</p>
+        </div>
+        <div id="photoGrid" class="photo-grid"></div>
+      </section>
+
+      <section id="progresso" class="page">
+        <div class="page-intro"><div><span class="section-label">ACOMPANHAMENTO</span><h2>Meu progresso</h2><p>Atualize seu percentual conforme avança no curso.</p></div></div>
+        <div class="progress-layout">
+          <article class="card progress-card">
+            <div class="progress-ring"><span id="progressNumber">0%</span></div>
+            <h3>Progresso do curso</h3>
+            <input id="progressRange" type="range" min="0" max="100" value="0">
+            <div class="range-labels"><span>0%</span><span>100%</span></div>
+            <button id="saveProgress" class="primary-btn">Salvar progresso</button>
+          </article>
+          <article class="card checklist-card">
+            <div class="card-heading"><div><span class="section-label">CHECKLIST</span><h3>Próximos passos</h3></div></div>
+            <label><input type="checkbox" class="study-check"> Revisar HTML semântico</label>
+            <label><input type="checkbox" class="study-check"> Praticar CSS Flexbox</label>
+            <label><input type="checkbox" class="study-check"> Praticar CSS Grid</label>
+            <label><input type="checkbox" class="study-check"> Criar projeto com JavaScript</label>
+            <label><input type="checkbox" class="study-check"> Publicar projeto no GitHub</label>
+          </article>
+        </div>
+      </section>
+
+      <footer>DevClub Study Panel • Feito para organizar seus estudos</footer>
+    </main>
+  </div>
+
+  <div id="toast" class="toast"></div>
+  <script src="java.js"></script>
+  <script>
+    if ("serviceWorker" in navigator) window.addEventListener("load", () => navigator.serviceWorker.register("sw.js"));
+  </script>
+</body>
+</html>
