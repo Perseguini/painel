@@ -1,10 +1,17 @@
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
-const KEY="devclub-study-pro-v2";
-let data=JSON.parse(localStorage.getItem(KEY)||'{"tickets":[],"notes":[],"photos":[],"progress":0}');
-let deferredPrompt=null;
 const esc=s=>String(s||"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]));
-function save(){localStorage.setItem(KEY,JSON.stringify(data));$("#statusText").textContent="Salvo neste aparelho";render();}
+const CACHE_KEY="devclub-study-pro-v2-cache";
+
+let data=JSON.parse(localStorage.getItem(CACHE_KEY)||'{"tickets":[],"notes":[],"photos":[],"progress":0}');
+let currentUser=null;
+let deferredPrompt=null;
+
+// Cliente Supabase (usa as chaves definidas em supabase-config.js)
+const sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
+
 function toast(t){const x=$("#toast");x.textContent=t;x.classList.add("show");setTimeout(()=>x.classList.remove("show"),2200)}
+function setStatus(text,cls){$("#statusText").textContent=text;$(".status").className="status"+(cls?" "+cls:"")}
+
 const titles={dashboard:"Dashboard",tickets:"Tickets de estudo",notes:"Anotações",photos:"Fotos & Prints",progress:"Meu progresso"};
 function openPage(id){$$(".page").forEach(p=>p.classList.remove("active"));$("#"+id).classList.add("active");$$(".nav").forEach(n=>n.classList.toggle("active",n.dataset.page===id));$("#title").textContent=titles[id];$(".sidebar").classList.remove("open");scrollTo({top:0,behavior:"smooth"})}
 window.openPage=openPage;
@@ -13,36 +20,202 @@ $("#menuBtn").onclick=()=>$(".sidebar").classList.toggle("open");
 $("#themeBtn").onclick=()=>{document.body.classList.toggle("dark");localStorage.setItem("devclub-theme",document.body.classList.contains("dark")?"dark":"light")};
 if(localStorage.getItem("devclub-theme")==="dark")document.body.classList.add("dark");
 
+/* ============================ AUTENTICAÇÃO ============================ */
+const authOverlay=$("#authOverlay"), authMsg=$("#authMsg");
+let authMode="login";
+
+function switchAuthMode(m){
+  authMode=m;
+  $("#authTabLogin").classList.toggle("active",m==="login");
+  $("#authTabSignup").classList.toggle("active",m==="signup");
+  $("#authSubmit").textContent=m==="login"?"Entrar":"Criar conta";
+  authMsg.textContent="";authMsg.className="auth-msg";
+}
+$("#authTabLogin").onclick=()=>switchAuthMode("login");
+$("#authTabSignup").onclick=()=>switchAuthMode("signup");
+
+function traduzErroAuth(m){
+  if(/Invalid login credentials/i.test(m))return "E-mail ou senha incorretos.";
+  if(/User already registered/i.test(m))return "Este e-mail já tem conta. Faça login.";
+  if(/Password should be at least/i.test(m))return "A senha precisa ter pelo menos 6 caracteres.";
+  if(/Email not confirmed/i.test(m))return "Confirme seu e-mail antes de entrar (verifique sua caixa de entrada).";
+  return "Erro: "+m;
+}
+
+$("#authForm").onsubmit=async e=>{
+  e.preventDefault();
+  const email=$("#authEmail").value.trim(), password=$("#authPassword").value;
+  $("#authSubmit").disabled=true; authMsg.textContent="Aguarde..."; authMsg.className="auth-msg";
+  try{
+    if(authMode==="login"){
+      const {error}=await sb.auth.signInWithPassword({email,password});
+      if(error) throw error;
+    }else{
+      const {error}=await sb.auth.signUp({email,password});
+      if(error) throw error;
+      authMsg.textContent="Conta criada! Se for solicitado, confirme seu e-mail e depois faça login.";
+      authMsg.className="auth-msg ok";
+      $("#authSubmit").disabled=false;
+      return;
+    }
+  }catch(err){
+    authMsg.textContent=traduzErroAuth(err.message);
+    authMsg.className="auth-msg error";
+  }
+  $("#authSubmit").disabled=false;
+};
+$("#logoutBtn").onclick=async()=>{await sb.auth.signOut();};
+
+sb.auth.onAuthStateChange((_event,session)=>{
+  if(session?.user){currentUser=session.user;onLogin();}
+  else{currentUser=null;onLogout();}
+});
+
+async function onLogin(){
+  authOverlay.classList.add("hidden");
+  $("#userChip").textContent=currentUser.email;
+  await loadCloudData();
+}
+function onLogout(){
+  data={tickets:[],notes:[],photos:[],progress:0};
+  $("#userChip").textContent="";
+  switchAuthMode("login");
+  authOverlay.classList.remove("hidden");
+  render();
+}
+
+/* ======================= CARREGAR DADOS DA NUVEM ======================= */
+async function loadCloudData(){
+  setStatus("Sincronizando...","syncing");
+  try{
+    const [tk,nt,pr]=await Promise.all([
+      sb.from("tickets").select("*").order("created_at",{ascending:true}),
+      sb.from("notes").select("*").order("created_at",{ascending:true}),
+      sb.from("progress").select("*").eq("user_id",currentUser.id).maybeSingle()
+    ]);
+    if(tk.error)throw tk.error; if(nt.error)throw nt.error; if(pr.error)throw pr.error;
+    data.tickets=tk.data.map(t=>({id:t.id,title:t.title,priority:t.priority,desc:t.description,date:new Date(t.created_at).getTime()}));
+    data.notes=nt.data.map(n=>({id:n.id,title:n.title,cat:n.category,text:n.content,date:new Date(n.created_at).getTime()}));
+    data.progress=pr.data?pr.data.value:0;
+    data.photos=await loadPhotos();
+    localStorage.setItem(CACHE_KEY,JSON.stringify(data));
+    setStatus("Sincronizado ✓","");
+  }catch(err){
+    console.error(err);
+    const cached=localStorage.getItem(CACHE_KEY);
+    if(cached){data=JSON.parse(cached);setStatus("Modo offline (dados salvos localmente)","offline");}
+    else setStatus("Erro ao conectar à nuvem","offline");
+  }
+  render();
+}
+
+async function loadPhotos(){
+  const {data:files,error}=await sb.storage.from("photos").list(currentUser.id,{sortBy:{column:"created_at",order:"desc"}});
+  if(error||!files)return [];
+  const withUrls=await Promise.all(files.map(async f=>{
+    const path=`${currentUser.id}/${f.name}`;
+    const {data:signed}=await sb.storage.from("photos").createSignedUrl(path,3600);
+    return {id:f.name,path,name:f.name,src:signed?.signedUrl||""};
+  }));
+  return withUrls;
+}
+
+/* ============================== TICKETS ============================== */
 $("#newTicketBtn").onclick=()=>$("#ticketForm").classList.remove("hidden");
 $("#cancelTicket").onclick=()=>$("#ticketForm").classList.add("hidden");
-$("#ticketFormEl").onsubmit=e=>{e.preventDefault();data.tickets.push({id:crypto.randomUUID(),title:$("#tTitle").value,priority:$("#tPriority").value,desc:$("#tDesc").value,date:Date.now()});e.target.reset();$("#ticketForm").classList.add("hidden");save();toast("Ticket salvo!")};
-window.delTicket=id=>{data.tickets=data.tickets.filter(x=>x.id!==id);save();toast("Ticket excluído.")};
+$("#ticketFormEl").onsubmit=async e=>{
+  e.preventDefault();
+  const title=$("#tTitle").value, priority=$("#tPriority").value, desc=$("#tDesc").value;
+  e.target.reset(); $("#ticketForm").classList.add("hidden");
+  try{
+    const {data:row,error}=await sb.from("tickets").insert({title,priority,description:desc,user_id:currentUser.id}).select().single();
+    if(error)throw error;
+    data.tickets.push({id:row.id,title:row.title,priority:row.priority,desc:row.description,date:new Date(row.created_at).getTime()});
+    cacheAndRender();toast("Ticket salvo!");
+  }catch(err){console.error(err);toast("Não foi possível salvar na nuvem.");}
+};
+window.delTicket=async id=>{
+  const backup=data.tickets;
+  data.tickets=data.tickets.filter(x=>x.id!==id);cacheAndRender();
+  const {error}=await sb.from("tickets").delete().eq("id",id);
+  if(error){console.error(error);data.tickets=backup;cacheAndRender();toast("Erro ao excluir na nuvem.");}
+  else toast("Ticket excluído.");
+};
 
+/* ================================ NOTAS ================================ */
 $("#newNoteBtn").onclick=()=>$("#noteForm").classList.remove("hidden");
 $("#cancelNote").onclick=()=>$("#noteForm").classList.add("hidden");
-$("#noteFormEl").onsubmit=e=>{e.preventDefault();data.notes.push({id:crypto.randomUUID(),title:$("#nTitle").value,cat:$("#nCat").value,text:$("#nText").value,date:Date.now()});e.target.reset();$("#noteForm").classList.add("hidden");save();toast("Anotação salva!")};
-window.delNote=id=>{data.notes=data.notes.filter(x=>x.id!==id);save();toast("Anotação excluída.")};
+$("#noteFormEl").onsubmit=async e=>{
+  e.preventDefault();
+  const title=$("#nTitle").value, cat=$("#nCat").value, text=$("#nText").value;
+  e.target.reset(); $("#noteForm").classList.add("hidden");
+  try{
+    const {data:row,error}=await sb.from("notes").insert({title,category:cat,content:text,user_id:currentUser.id}).select().single();
+    if(error)throw error;
+    data.notes.push({id:row.id,title:row.title,cat:row.category,text:row.content,date:new Date(row.created_at).getTime()});
+    cacheAndRender();toast("Anotação salva!");
+  }catch(err){console.error(err);toast("Não foi possível salvar na nuvem.");}
+};
+window.delNote=async id=>{
+  const backup=data.notes;
+  data.notes=data.notes.filter(x=>x.id!==id);cacheAndRender();
+  const {error}=await sb.from("notes").delete().eq("id",id);
+  if(error){console.error(error);data.notes=backup;cacheAndRender();toast("Erro ao excluir na nuvem.");}
+  else toast("Anotação excluída.");
+};
 
-function addImages(files){[...files].filter(f=>f.type.startsWith("image/")).forEach(file=>{const r=new FileReader();r.onload=()=>{data.photos.push({id:crypto.randomUUID(),name:file.name,src:r.result});save();toast("Foto adicionada!")};r.readAsDataURL(file)})}
+/* ============================ FOTOS & PRINTS ============================ */
+async function addImages(files){
+  for(const file of [...files].filter(f=>f.type.startsWith("image/"))){
+    const path=`${currentUser.id}/${crypto.randomUUID()}-${file.name}`;
+    try{
+      const {error}=await sb.storage.from("photos").upload(path,file);
+      if(error)throw error;
+      const {data:signed}=await sb.storage.from("photos").createSignedUrl(path,3600);
+      data.photos.unshift({id:path.split("/").pop(),path,name:file.name,src:signed?.signedUrl||""});
+      cacheAndRender();toast("Foto adicionada!");
+    }catch(err){console.error(err);toast("Erro ao enviar foto para a nuvem.");}
+  }
+}
 $("#photoInput").onchange=e=>addImages(e.target.files);
 $("#drop").ondragover=e=>{e.preventDefault();$("#drop").style.borderColor="var(--purple)"};
 $("#drop").ondrop=e=>{e.preventDefault();$("#drop").style.borderColor="var(--line)";addImages(e.dataTransfer.files)};
-window.delPhoto=id=>{data.photos=data.photos.filter(x=>x.id!==id);save();toast("Foto excluída.")};
+window.delPhoto=async id=>{
+  const photo=data.photos.find(p=>p.id===id);
+  const backup=data.photos;
+  data.photos=data.photos.filter(x=>x.id!==id);cacheAndRender();
+  if(photo){
+    const {error}=await sb.storage.from("photos").remove([photo.path]);
+    if(error){console.error(error);data.photos=backup;cacheAndRender();toast("Erro ao excluir na nuvem.");}
+    else toast("Foto excluída.");
+  }
+};
 
-$("#range").value=data.progress;
+/* =============================== PROGRESSO =============================== */
 $("#range").oninput=e=>updateRing(+e.target.value);
 function updateRing(v){$("#pNumber").textContent=v+"%";let d=v*3.6;$("#ring").style.background=`conic-gradient(var(--purple) ${d}deg,var(--line) ${d}deg)`}
-$("#saveP").onclick=()=>{data.progress=+$("#range").value;save();toast("Progresso atualizado!")};
+$("#saveP").onclick=async()=>{
+  const value=+$("#range").value, prev=data.progress;
+  data.progress=value;cacheAndRender();
+  try{
+    const {error}=await sb.from("progress").upsert({user_id:currentUser.id,value,updated_at:new Date().toISOString()});
+    if(error)throw error;
+    toast("Progresso atualizado!");
+  }catch(err){console.error(err);data.progress=prev;cacheAndRender();toast("Não foi possível sincronizar o progresso.");}
+};
 
+/* ================================ RENDER ================================ */
+function cacheAndRender(){localStorage.setItem(CACHE_KEY,JSON.stringify(data));render();}
 function render(){
- $("#sTickets").textContent=data.tickets.length;$("#sNotes").textContent=data.notes.length;$("#sPhotos").textContent=data.photos.length;$("#sProgress").textContent=data.progress+"%";$("#ticketBadge").textContent=data.tickets.length;updateRing(data.progress);
- const dt=$("#dashTickets");dt.innerHTML=data.tickets.length?data.tickets.slice(-4).reverse().map(t=>`<div class="mini"><b>${esc(t.title)}</b><small>${esc(t.priority)} • ${new Date(t.date).toLocaleDateString("pt-BR")}</small></div>`).join(""):'<p style="color:var(--muted);font-size:12px">Nenhum ticket cadastrado.</p>';
- const tg=$("#ticketsGrid");tg.innerHTML=data.tickets.length?data.tickets.slice().reverse().map(t=>`<article class="ticket"><div class="ticket-top"><span class="ticket-title">${esc(t.title)}</span><span class="priority">${esc(t.priority)}</span></div><p>${esc(t.desc)||"Sem descrição."}</p><div class="ticket-foot"><small>${new Date(t.date).toLocaleDateString("pt-BR")}</small><button class="delete" onclick="delTicket('${t.id}')">Excluir</button></div></article>`).join(""):'<div class="card" style="grid-column:1/-1;color:var(--muted)">Nenhum ticket ainda. Crie sua primeira dúvida.</div>';
- const ng=$("#notesGrid");ng.innerHTML=data.notes.length?data.notes.slice().reverse().map(n=>`<article class="note"><span class="cat">${esc(n.cat)}</span><h3>${esc(n.title)}</h3><p>${esc(n.text)}</p><div class="note-foot"><span>${new Date(n.date).toLocaleDateString("pt-BR")}</span><button class="delete" onclick="delNote('${n.id}')">Excluir</button></div></article>`).join(""):'<div class="card" style="grid-column:1/-1;color:var(--muted)">Nenhuma anotação ainda.</div>';
- const pg=$("#photosGrid");pg.innerHTML=data.photos.length?data.photos.slice().reverse().map(p=>`<div class="photo"><img src="${p.src}" alt="${esc(p.name)}"><button onclick="delPhoto('${p.id}')">×</button></div>`).join(""):'<div class="card" style="grid-column:1/-1;color:var(--muted)">Nenhuma foto adicionada.</div>';
+  $("#sTickets").textContent=data.tickets.length;$("#sNotes").textContent=data.notes.length;$("#sPhotos").textContent=data.photos.length;$("#sProgress").textContent=data.progress+"%";$("#ticketBadge").textContent=data.tickets.length;$("#range").value=data.progress;updateRing(data.progress);
+  const dt=$("#dashTickets");dt.innerHTML=data.tickets.length?data.tickets.slice(-4).reverse().map(t=>`<div class="mini"><b>${esc(t.title)}</b><small>${esc(t.priority)} • ${new Date(t.date).toLocaleDateString("pt-BR")}</small></div>`).join(""):'<p style="color:var(--muted);font-size:12px">Nenhum ticket cadastrado.</p>';
+  const tg=$("#ticketsGrid");tg.innerHTML=data.tickets.length?data.tickets.slice().reverse().map(t=>`<article class="ticket"><div class="ticket-top"><span class="ticket-title">${esc(t.title)}</span><span class="priority">${esc(t.priority)}</span></div><p>${esc(t.desc)||"Sem descrição."}</p><div class="ticket-foot"><small>${new Date(t.date).toLocaleDateString("pt-BR")}</small><button class="delete" onclick="delTicket('${t.id}')">Excluir</button></div></article>`).join(""):'<div class="card" style="grid-column:1/-1;color:var(--muted)">Nenhum ticket ainda. Crie sua primeira dúvida.</div>';
+  const ng=$("#notesGrid");ng.innerHTML=data.notes.length?data.notes.slice().reverse().map(n=>`<article class="note"><span class="cat">${esc(n.cat)}</span><h3>${esc(n.title)}</h3><p>${esc(n.text)}</p><div class="note-foot"><span>${new Date(n.date).toLocaleDateString("pt-BR")}</span><button class="delete" onclick="delNote('${n.id}')">Excluir</button></div></article>`).join(""):'<div class="card" style="grid-column:1/-1;color:var(--muted)">Nenhuma anotação ainda.</div>';
+  const pg=$("#photosGrid");pg.innerHTML=data.photos.length?data.photos.map(p=>`<div class="photo"><img src="${p.src}" alt="${esc(p.name)}"><button onclick="delPhoto('${p.id}')">×</button></div>`).join(""):'<div class="card" style="grid-column:1/-1;color:var(--muted)">Nenhuma foto adicionada.</div>';
 }
 render();
 
+/* ================================== PWA ================================== */
 window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();deferredPrompt=e;$("#installBtn").hidden=false});
 $("#installBtn").onclick=async()=>{if(!deferredPrompt){toast("No Chrome, use ⋮ > Instalar aplicativo.");return}deferredPrompt.prompt();await deferredPrompt.userChoice;deferredPrompt=null;$("#installBtn").hidden=true};
 window.addEventListener("appinstalled",()=>toast("Aplicativo instalado!"));

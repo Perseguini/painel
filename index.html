@@ -9,6 +9,21 @@
 <title>DevClub Study Pro</title>
 </head>
 <body>
+<div id="authOverlay" class="auth-overlay">
+  <div class="card auth-card">
+    <div class="logo"><b>&lt;/&gt;</b><div><strong>DEVCLUB</strong><small>STUDY PRO</small></div></div>
+    <div class="auth-tabs">
+      <button id="authTabLogin" type="button" class="active">Entrar</button>
+      <button id="authTabSignup" type="button">Criar conta</button>
+    </div>
+    <form id="authForm">
+      <input id="authEmail" type="email" required placeholder="Seu e-mail" autocomplete="email">
+      <input id="authPassword" type="password" required minlength="6" placeholder="Senha (mín. 6 caracteres)" autocomplete="current-password">
+      <button id="authSubmit" class="primary" type="submit">Entrar</button>
+    </form>
+    <p id="authMsg" class="auth-msg"></p>
+  </div>
+</div>
 <div id="app">
 <aside class="sidebar">
   <div class="logo"><b>&lt;/&gt;</b><div><strong>DEVCLUB</strong><small>STUDY PRO</small></div></div>
@@ -20,8 +35,10 @@
     <button class="nav" data-page="progress">📈 <span>Progresso</span></button>
   </nav>
   <div class="side-bottom">
+    <div id="userChip" class="user-chip"></div>
     <button id="installBtn" class="install" hidden>⇩ Instalar aplicativo</button>
     <button id="themeBtn" class="ghost">☾ Tema claro/escuro</button>
+    <button id="logoutBtn" class="ghost">↩ Sair</button>
   </div>
 </aside>
 
@@ -102,6 +119,8 @@
 </main>
 </div>
 <div id="toast" class="toast"></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="supabase-config.js"></script>
 <script src="java.js"></script>
 </body>
 </html>
