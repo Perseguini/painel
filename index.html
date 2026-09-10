@@ -29,10 +29,8 @@
   <div class="logo"><b>&lt;/&gt;</b><div><strong>DEVCLUB</strong><small>STUDY PRO</small></div></div>
   <nav>
     <button class="nav active" data-page="dashboard">⌂ <span>Dashboard</span></button>
-    <button class="nav" data-page="tickets">🎫 <span>Tickets</span><em id="ticketBadge">0</em></button>
     <button class="nav" data-page="notes">📝 <span>Anotações</span></button>
     <button class="nav" data-page="photos">🖼️ <span>Fotos & Prints</span></button>
-    <button class="nav" data-page="progress">📈 <span>Progresso</span></button>
   </nav>
   <div class="side-bottom">
     <div id="userChip" class="user-chip"></div>
@@ -52,40 +50,27 @@
 <section id="dashboard" class="page active">
   <div class="hero">
     <div><span class="pill">ESTUDOS • RODOLFO MORI</span><h2>Olá! 👋<br><span>Vamos continuar evoluindo.</span></h2>
-    <p>Organize dúvidas, anotações, prints e progresso do curso em um único painel.</p>
-    <button class="hero-btn" onclick="openPage('tickets')">🎫 Abrir meus tickets</button></div>
+    <p>Organize anotações e prints do curso em um único painel.</p>
+    <button class="hero-btn" onclick="openPage('notes')">📝 Abrir minhas anotações</button></div>
     <div class="code-art">&lt;/&gt;<small>LEARN<br>BUILD<br>REPEAT</small></div>
   </div>
   <div class="stats">
-    <article><i>🎫</i><span>Tickets</span><strong id="sTickets">0</strong><small>pendentes</small></article>
     <article><i>📝</i><span>Anotações</span><strong id="sNotes">0</strong><small>salvas</small></article>
     <article><i>🖼️</i><span>Fotos</span><strong id="sPhotos">0</strong><small>arquivadas</small></article>
-    <article><i>📈</i><span>Progresso</span><strong id="sProgress">0%</strong><small>do curso</small></article>
   </div>
   <div class="two">
     <article class="card">
       <div class="head"><div><small>ACESSO RÁPIDO</small><h3>O que estudar agora?</h3></div>⚡</div>
       <div class="quick">
-        <button onclick="openPage('tickets')"><b>+</b><span><strong>Novo ticket</strong><small>Registrar uma dúvida</small></span>›</button>
         <button onclick="openPage('notes')"><b>+</b><span><strong>Nova anotação</strong><small>Guardar conhecimento</small></span>›</button>
         <button onclick="openPage('photos')"><b>↑</b><span><strong>Adicionar print</strong><small>Salvar referência visual</small></span>›</button>
       </div>
     </article>
     <article class="card">
-      <div class="head"><div><small>ATIVIDADE</small><h3>Últimos tickets</h3></div><button class="link" onclick="openPage('tickets')">Ver todos</button></div>
-      <div id="dashTickets" class="list"></div>
+      <div class="head"><div><small>ATIVIDADE</small><h3>Últimas anotações</h3></div><button class="link" onclick="openPage('notes')">Ver todas</button></div>
+      <div id="dashNotes" class="list"></div>
     </article>
   </div>
-</section>
-
-<section id="tickets" class="page">
-  <div class="page-head"><div><small>ORGANIZAÇÃO</small><h2>Tickets de estudo</h2><p>Transforme dúvidas em tarefas de aprendizado.</p></div><button class="primary" id="newTicketBtn">+ Novo ticket</button></div>
-  <div id="ticketForm" class="card form hidden"><form id="ticketFormEl">
-    <div class="row"><input id="tTitle" required placeholder="Título da dúvida"><select id="tPriority"><option>Alta</option><option selected>Média</option><option>Baixa</option></select></div>
-    <textarea id="tDesc" rows="4" placeholder="O que você precisa entender?"></textarea>
-    <div class="actions"><button type="button" class="secondary" id="cancelTicket">Cancelar</button><button class="primary">Salvar ticket</button></div>
-  </form></div>
-  <div id="ticketsGrid" class="tickets-grid"></div>
 </section>
 
 <section id="notes" class="page">
@@ -103,16 +88,6 @@
  <label class="primary upload">+ Adicionar fotos<input id="photoInput" type="file" accept="image/*" multiple hidden></label></div>
  <div id="drop" class="card drop"><div>↑</div><h3>Arraste seus prints para cá</h3><p>Ou clique em “Adicionar fotos”.</p></div>
  <div id="photosGrid" class="photos-grid"></div>
-</section>
-
-<section id="progress" class="page">
- <div class="page-head"><div><small>ACOMPANHAMENTO</small><h2>Meu progresso</h2><p>Acompanhe sua evolução no curso.</p></div></div>
- <div class="progress-layout">
-  <article class="card progress-card"><div id="ring" class="ring"><strong id="pNumber">0%</strong></div><h3>Curso concluído</h3><input id="range" type="range" min="0" max="100" value="0"><div class="range"><span>0%</span><span>100%</span></div><button id="saveP" class="primary">Salvar progresso</button></article>
-  <article class="card checklist"><div class="head"><div><small>ROTINA</small><h3>Checklist de estudos</h3></div>✓</div>
-   <label><input type="checkbox"> Revisar HTML semântico</label><label><input type="checkbox"> Praticar CSS Flexbox</label><label><input type="checkbox"> Praticar CSS Grid</label><label><input type="checkbox"> Exercícios de JavaScript</label><label><input type="checkbox"> Praticar Git e GitHub</label><label><input type="checkbox"> Criar um projeto próprio</label>
-  </article>
- </div>
 </section>
 
 <footer>DevClub Study Pro • Seus estudos, organizados.</footer>

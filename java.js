@@ -2,7 +2,7 @@ const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const esc=s=>String(s||"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]));
 const CACHE_KEY="devclub-study-pro-v2-cache";
 
-let data=JSON.parse(localStorage.getItem(CACHE_KEY)||'{"tickets":[],"notes":[],"photos":[],"progress":0}');
+let data=JSON.parse(localStorage.getItem(CACHE_KEY)||'{"notes":[],"photos":[]}');
 let currentUser=null;
 let deferredPrompt=null;
 
@@ -12,7 +12,7 @@ const sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
 function toast(t){const x=$("#toast");x.textContent=t;x.classList.add("show");setTimeout(()=>x.classList.remove("show"),2200)}
 function setStatus(text,cls){$("#statusText").textContent=text;$(".status").className="status"+(cls?" "+cls:"")}
 
-const titles={dashboard:"Dashboard",tickets:"Tickets de estudo",notes:"Anotações",photos:"Fotos & Prints",progress:"Meu progresso"};
+const titles={dashboard:"Dashboard",notes:"Anotações",photos:"Fotos & Prints"};
 function openPage(id){$$(".page").forEach(p=>p.classList.remove("active"));$("#"+id).classList.add("active");$$(".nav").forEach(n=>n.classList.toggle("active",n.dataset.page===id));$("#title").textContent=titles[id];$(".sidebar").classList.remove("open");scrollTo({top:0,behavior:"smooth"})}
 window.openPage=openPage;
 $$(".nav").forEach(n=>n.onclick=()=>openPage(n.dataset.page));
@@ -77,7 +77,7 @@ async function onLogin(){
   await loadCloudData();
 }
 function onLogout(){
-  data={tickets:[],notes:[],photos:[],progress:0};
+  data={notes:[],photos:[]};
   $("#userChip").textContent="";
   switchAuthMode("login");
   authOverlay.classList.remove("hidden");
@@ -88,15 +88,9 @@ function onLogout(){
 async function loadCloudData(){
   setStatus("Sincronizando...","syncing");
   try{
-    const [tk,nt,pr]=await Promise.all([
-      sb.from("tickets").select("*").order("created_at",{ascending:true}),
-      sb.from("notes").select("*").order("created_at",{ascending:true}),
-      sb.from("progress").select("*").eq("user_id",currentUser.id).maybeSingle()
-    ]);
-    if(tk.error)throw tk.error; if(nt.error)throw nt.error; if(pr.error)throw pr.error;
-    data.tickets=tk.data.map(t=>({id:t.id,title:t.title,priority:t.priority,desc:t.description,date:new Date(t.created_at).getTime()}));
+    const nt=await sb.from("notes").select("*").order("created_at",{ascending:true});
+    if(nt.error)throw nt.error;
     data.notes=nt.data.map(n=>({id:n.id,title:n.title,cat:n.category,text:n.content,date:new Date(n.created_at).getTime()}));
-    data.progress=pr.data?pr.data.value:0;
     data.photos=await loadPhotos();
     localStorage.setItem(CACHE_KEY,JSON.stringify(data));
     setStatus("Sincronizado ✓","");
@@ -119,28 +113,6 @@ async function loadPhotos(){
   }));
   return withUrls;
 }
-
-/* ============================== TICKETS ============================== */
-$("#newTicketBtn").onclick=()=>$("#ticketForm").classList.remove("hidden");
-$("#cancelTicket").onclick=()=>$("#ticketForm").classList.add("hidden");
-$("#ticketFormEl").onsubmit=async e=>{
-  e.preventDefault();
-  const title=$("#tTitle").value, priority=$("#tPriority").value, desc=$("#tDesc").value;
-  e.target.reset(); $("#ticketForm").classList.add("hidden");
-  try{
-    const {data:row,error}=await sb.from("tickets").insert({title,priority,description:desc,user_id:currentUser.id}).select().single();
-    if(error)throw error;
-    data.tickets.push({id:row.id,title:row.title,priority:row.priority,desc:row.description,date:new Date(row.created_at).getTime()});
-    cacheAndRender();toast("Ticket salvo!");
-  }catch(err){console.error(err);toast("Não foi possível salvar na nuvem.");}
-};
-window.delTicket=async id=>{
-  const backup=data.tickets;
-  data.tickets=data.tickets.filter(x=>x.id!==id);cacheAndRender();
-  const {error}=await sb.from("tickets").delete().eq("id",id);
-  if(error){console.error(error);data.tickets=backup;cacheAndRender();toast("Erro ao excluir na nuvem.");}
-  else toast("Ticket excluído.");
-};
 
 /* ================================ NOTAS ================================ */
 $("#newNoteBtn").onclick=()=>$("#noteForm").classList.remove("hidden");
@@ -191,25 +163,11 @@ window.delPhoto=async id=>{
   }
 };
 
-/* =============================== PROGRESSO =============================== */
-$("#range").oninput=e=>updateRing(+e.target.value);
-function updateRing(v){$("#pNumber").textContent=v+"%";let d=v*3.6;$("#ring").style.background=`conic-gradient(var(--purple) ${d}deg,var(--line) ${d}deg)`}
-$("#saveP").onclick=async()=>{
-  const value=+$("#range").value, prev=data.progress;
-  data.progress=value;cacheAndRender();
-  try{
-    const {error}=await sb.from("progress").upsert({user_id:currentUser.id,value,updated_at:new Date().toISOString()});
-    if(error)throw error;
-    toast("Progresso atualizado!");
-  }catch(err){console.error(err);data.progress=prev;cacheAndRender();toast("Não foi possível sincronizar o progresso.");}
-};
-
 /* ================================ RENDER ================================ */
 function cacheAndRender(){localStorage.setItem(CACHE_KEY,JSON.stringify(data));render();}
 function render(){
-  $("#sTickets").textContent=data.tickets.length;$("#sNotes").textContent=data.notes.length;$("#sPhotos").textContent=data.photos.length;$("#sProgress").textContent=data.progress+"%";$("#ticketBadge").textContent=data.tickets.length;$("#range").value=data.progress;updateRing(data.progress);
-  const dt=$("#dashTickets");dt.innerHTML=data.tickets.length?data.tickets.slice(-4).reverse().map(t=>`<div class="mini"><b>${esc(t.title)}</b><small>${esc(t.priority)} • ${new Date(t.date).toLocaleDateString("pt-BR")}</small></div>`).join(""):'<p style="color:var(--muted);font-size:12px">Nenhum ticket cadastrado.</p>';
-  const tg=$("#ticketsGrid");tg.innerHTML=data.tickets.length?data.tickets.slice().reverse().map(t=>`<article class="ticket"><div class="ticket-top"><span class="ticket-title">${esc(t.title)}</span><span class="priority">${esc(t.priority)}</span></div><p>${esc(t.desc)||"Sem descrição."}</p><div class="ticket-foot"><small>${new Date(t.date).toLocaleDateString("pt-BR")}</small><button class="delete" onclick="delTicket('${t.id}')">Excluir</button></div></article>`).join(""):'<div class="card" style="grid-column:1/-1;color:var(--muted)">Nenhum ticket ainda. Crie sua primeira dúvida.</div>';
+  $("#sNotes").textContent=data.notes.length;$("#sPhotos").textContent=data.photos.length;
+  const dn=$("#dashNotes");dn.innerHTML=data.notes.length?data.notes.slice(-4).reverse().map(n=>`<div class="mini"><b>${esc(n.title)}</b><small>${esc(n.cat)} • ${new Date(n.date).toLocaleDateString("pt-BR")}</small></div>`).join(""):'<p style="color:var(--muted);font-size:12px">Nenhuma anotação cadastrada.</p>';
   const ng=$("#notesGrid");ng.innerHTML=data.notes.length?data.notes.slice().reverse().map(n=>`<article class="note"><span class="cat">${esc(n.cat)}</span><h3>${esc(n.title)}</h3><p>${esc(n.text)}</p><div class="note-foot"><span>${new Date(n.date).toLocaleDateString("pt-BR")}</span><button class="delete" onclick="delNote('${n.id}')">Excluir</button></div></article>`).join(""):'<div class="card" style="grid-column:1/-1;color:var(--muted)">Nenhuma anotação ainda.</div>';
   const pg=$("#photosGrid");pg.innerHTML=data.photos.length?data.photos.map(p=>`<div class="photo"><img src="${p.src}" alt="${esc(p.name)}"><button onclick="delPhoto('${p.id}')">×</button></div>`).join(""):'<div class="card" style="grid-column:1/-1;color:var(--muted)">Nenhuma foto adicionada.</div>';
 }
