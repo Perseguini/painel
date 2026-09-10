@@ -1,104 +1,49 @@
-const $ = (s) => document.querySelector(s);
-const $$ = (s) => [...document.querySelectorAll(s)];
-
-const KEY = "devclub-study-panel-v1";
-let state = JSON.parse(localStorage.getItem(KEY) || '{"tickets":[],"notes":[],"photos":[],"progress":0}');
-let deferredPrompt = null;
-
-function save(){
-  localStorage.setItem(KEY, JSON.stringify(state));
-  $("#saveStatus").textContent = "Salvo localmente";
-  updateStats();
-}
-function toast(msg){
-  const el=$("#toast"); el.textContent=msg; el.classList.add("show");
-  setTimeout(()=>el.classList.remove("show"),2200);
-}
-function updateStats(){
-  $("#statNotes").textContent=state.notes.length;
-  $("#statPhotos").textContent=state.photos.length;
-  $("#statProgress").textContent=state.progress+"%";
-  $("#progressNumber").textContent=state.progress+"%";
-  const deg=state.progress*3.6;
-  $(".progress-ring").style.background=`conic-gradient(var(--purple) ${deg}deg, var(--border) ${deg}deg)`;
-}
-function renderTickets(){
-  const list=$("#ticketList");
-  if(!state.tickets.length){list.innerHTML='<div class="empty">Nenhum ticket ainda. Crie o primeiro ao lado.</div>';return}
-  list.innerHTML=state.tickets.slice().reverse().map(t=>`
-    <div class="ticket">
-      <div class="ticket-top"><span class="ticket-title">${escapeHtml(t.title)}</span><span class="priority">${escapeHtml(t.priority)}</span></div>
-      ${t.text?`<p>${escapeHtml(t.text)}</p>`:""}
-      <button class="delete" onclick="deleteTicket('${t.id}')">Excluir</button>
-    </div>`).join("");
-}
-function renderNotes(){
-  const grid=$("#notesGrid");
-  if(!state.notes.length){grid.innerHTML='<div class="card empty">Nenhuma anotação. Clique em “Nova anotação” para começar.</div>';return}
-  grid.innerHTML=state.notes.slice().reverse().map(n=>`
-    <article class="note"><span class="note-category">${escapeHtml(n.category)}</span>
-    <h3>${escapeHtml(n.title)}</h3><p>${escapeHtml(n.text)}</p>
-    <div class="note-bottom"><small>${new Date(n.date).toLocaleDateString("pt-BR")}</small>
-    <button class="delete" onclick="deleteNote('${n.id}')">Excluir</button></div></article>`).join("");
-}
-function renderPhotos(){
-  const grid=$("#photoGrid");
-  if(!state.photos.length){grid.innerHTML='<div class="card empty">Nenhuma foto adicionada ainda.</div>';return}
-  grid.innerHTML=state.photos.slice().reverse().map(p=>`
-    <div class="photo"><img src="${p.data}" alt="${escapeHtml(p.name)}" loading="lazy">
-    <button onclick="deletePhoto('${p.id}')" aria-label="Excluir foto">×</button></div>`).join("");
-}
-function escapeHtml(str=""){return str.replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]))}
-
-$("#ticketForm").addEventListener("submit",e=>{
-  e.preventDefault();
-  state.tickets.push({id:crypto.randomUUID(),title:$("#ticketTitle").value,priority:$("#ticketPriority").value,text:$("#ticketText").value});
-  e.target.reset(); save(); renderTickets(); toast("Ticket criado!");
-});
-window.deleteTicket=id=>{state.tickets=state.tickets.filter(x=>x.id!==id);save();renderTickets();toast("Ticket excluído.")};
-
-$("#newNoteBtn").onclick=()=>$("#noteFormWrap").classList.remove("hidden");
-$("#cancelNote").onclick=()=>$("#noteFormWrap").classList.add("hidden");
-$("#noteForm").addEventListener("submit",e=>{
-  e.preventDefault();
-  state.notes.push({id:crypto.randomUUID(),title:$("#noteTitle").value,category:$("#noteCategory").value,text:$("#noteText").value,date:Date.now()});
-  e.target.reset();$("#noteFormWrap").classList.add("hidden");save();renderNotes();toast("Anotação salva!");
-});
-window.deleteNote=id=>{state.notes=state.notes.filter(x=>x.id!==id);save();renderNotes();toast("Anotação excluída.")};
-
-function readFiles(files){
-  [...files].filter(f=>f.type.startsWith("image/")).forEach(file=>{
-    const reader=new FileReader();
-    reader.onload=()=>{state.photos.push({id:crypto.randomUUID(),name:file.name,data:reader.result});save();renderPhotos();toast("Foto salva no aparelho.")};
-    reader.readAsDataURL(file);
-  });
-}
-$("#photoInput").addEventListener("change",e=>readFiles(e.target.files));
-const drop=$("#dropArea");
-["dragenter","dragover"].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.style.borderColor="var(--purple)"}));
-["dragleave","drop"].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.style.borderColor="var(--border)"}));
-drop.addEventListener("drop",e=>readFiles(e.dataTransfer.files));
-window.deletePhoto=id=>{state.photos=state.photos.filter(x=>x.id!==id);save();renderPhotos();toast("Foto excluída.")};
-
-$("#progressRange").value=state.progress;
-$("#progressRange").oninput=e=>{$("#progressNumber").textContent=e.target.value+"%";const d=e.target.value*3.6;$(".progress-ring").style.background=`conic-gradient(var(--purple) ${d}deg,var(--border) ${d}deg)`};
-$("#saveProgress").onclick=()=>{state.progress=Number($("#progressRange").value);save();toast("Progresso atualizado!")};
-
-$$(".nav-item").forEach(btn=>btn.onclick=()=>{
-  $$(".nav-item").forEach(b=>b.classList.remove("active"));btn.classList.add("active");
-  $$(".page").forEach(p=>p.classList.remove("active-page"));$("#"+btn.dataset.page).classList.add("active-page");
-  $("#pageTitle").textContent={inicio:"Meu painel",anotacoes:"Anotações",fotos:"Fotos e prints",progresso:"Meu progresso"}[btn.dataset.page];
-  $(".sidebar").classList.remove("open");window.scrollTo({top:0,behavior:"smooth"});
-});
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+const KEY="devclub-study-pro-v2";
+let data=JSON.parse(localStorage.getItem(KEY)||'{"tickets":[],"notes":[],"photos":[],"progress":0}');
+let deferredPrompt=null;
+const esc=s=>String(s||"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]));
+function save(){localStorage.setItem(KEY,JSON.stringify(data));$("#statusText").textContent="Salvo neste aparelho";render();}
+function toast(t){const x=$("#toast");x.textContent=t;x.classList.add("show");setTimeout(()=>x.classList.remove("show"),2200)}
+const titles={dashboard:"Dashboard",tickets:"Tickets de estudo",notes:"Anotações",photos:"Fotos & Prints",progress:"Meu progresso"};
+function openPage(id){$$(".page").forEach(p=>p.classList.remove("active"));$("#"+id).classList.add("active");$$(".nav").forEach(n=>n.classList.toggle("active",n.dataset.page===id));$("#title").textContent=titles[id];$(".sidebar").classList.remove("open");scrollTo({top:0,behavior:"smooth"})}
+window.openPage=openPage;
+$$(".nav").forEach(n=>n.onclick=()=>openPage(n.dataset.page));
 $("#menuBtn").onclick=()=>$(".sidebar").classList.toggle("open");
 $("#themeBtn").onclick=()=>{document.body.classList.toggle("dark");localStorage.setItem("devclub-theme",document.body.classList.contains("dark")?"dark":"light")};
 if(localStorage.getItem("devclub-theme")==="dark")document.body.classList.add("dark");
 
-window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();deferredPrompt=e;$("#installBtn").hidden=false});
-$("#installBtn").onclick=async()=>{
-  if(!deferredPrompt){toast("No Chrome, abra o menu e escolha instalar aplicativo.");return}
-  deferredPrompt.prompt(); await deferredPrompt.userChoice; deferredPrompt=null; $("#installBtn").hidden=true;
-};
-window.addEventListener("appinstalled",()=>toast("Aplicativo instalado!"));
+$("#newTicketBtn").onclick=()=>$("#ticketForm").classList.remove("hidden");
+$("#cancelTicket").onclick=()=>$("#ticketForm").classList.add("hidden");
+$("#ticketFormEl").onsubmit=e=>{e.preventDefault();data.tickets.push({id:crypto.randomUUID(),title:$("#tTitle").value,priority:$("#tPriority").value,desc:$("#tDesc").value,date:Date.now()});e.target.reset();$("#ticketForm").classList.add("hidden");save();toast("Ticket salvo!")};
+window.delTicket=id=>{data.tickets=data.tickets.filter(x=>x.id!==id);save();toast("Ticket excluído.")};
 
-renderTickets();renderNotes();renderPhotos();updateStats();
+$("#newNoteBtn").onclick=()=>$("#noteForm").classList.remove("hidden");
+$("#cancelNote").onclick=()=>$("#noteForm").classList.add("hidden");
+$("#noteFormEl").onsubmit=e=>{e.preventDefault();data.notes.push({id:crypto.randomUUID(),title:$("#nTitle").value,cat:$("#nCat").value,text:$("#nText").value,date:Date.now()});e.target.reset();$("#noteForm").classList.add("hidden");save();toast("Anotação salva!")};
+window.delNote=id=>{data.notes=data.notes.filter(x=>x.id!==id);save();toast("Anotação excluída.")};
+
+function addImages(files){[...files].filter(f=>f.type.startsWith("image/")).forEach(file=>{const r=new FileReader();r.onload=()=>{data.photos.push({id:crypto.randomUUID(),name:file.name,src:r.result});save();toast("Foto adicionada!")};r.readAsDataURL(file)})}
+$("#photoInput").onchange=e=>addImages(e.target.files);
+$("#drop").ondragover=e=>{e.preventDefault();$("#drop").style.borderColor="var(--purple)"};
+$("#drop").ondrop=e=>{e.preventDefault();$("#drop").style.borderColor="var(--line)";addImages(e.dataTransfer.files)};
+window.delPhoto=id=>{data.photos=data.photos.filter(x=>x.id!==id);save();toast("Foto excluída.")};
+
+$("#range").value=data.progress;
+$("#range").oninput=e=>updateRing(+e.target.value);
+function updateRing(v){$("#pNumber").textContent=v+"%";let d=v*3.6;$("#ring").style.background=`conic-gradient(var(--purple) ${d}deg,var(--line) ${d}deg)`}
+$("#saveP").onclick=()=>{data.progress=+$("#range").value;save();toast("Progresso atualizado!")};
+
+function render(){
+ $("#sTickets").textContent=data.tickets.length;$("#sNotes").textContent=data.notes.length;$("#sPhotos").textContent=data.photos.length;$("#sProgress").textContent=data.progress+"%";$("#ticketBadge").textContent=data.tickets.length;updateRing(data.progress);
+ const dt=$("#dashTickets");dt.innerHTML=data.tickets.length?data.tickets.slice(-4).reverse().map(t=>`<div class="mini"><b>${esc(t.title)}</b><small>${esc(t.priority)} • ${new Date(t.date).toLocaleDateString("pt-BR")}</small></div>`).join(""):'<p style="color:var(--muted);font-size:12px">Nenhum ticket cadastrado.</p>';
+ const tg=$("#ticketsGrid");tg.innerHTML=data.tickets.length?data.tickets.slice().reverse().map(t=>`<article class="ticket"><div class="ticket-top"><span class="ticket-title">${esc(t.title)}</span><span class="priority">${esc(t.priority)}</span></div><p>${esc(t.desc)||"Sem descrição."}</p><div class="ticket-foot"><small>${new Date(t.date).toLocaleDateString("pt-BR")}</small><button class="delete" onclick="delTicket('${t.id}')">Excluir</button></div></article>`).join(""):'<div class="card" style="grid-column:1/-1;color:var(--muted)">Nenhum ticket ainda. Crie sua primeira dúvida.</div>';
+ const ng=$("#notesGrid");ng.innerHTML=data.notes.length?data.notes.slice().reverse().map(n=>`<article class="note"><span class="cat">${esc(n.cat)}</span><h3>${esc(n.title)}</h3><p>${esc(n.text)}</p><div class="note-foot"><span>${new Date(n.date).toLocaleDateString("pt-BR")}</span><button class="delete" onclick="delNote('${n.id}')">Excluir</button></div></article>`).join(""):'<div class="card" style="grid-column:1/-1;color:var(--muted)">Nenhuma anotação ainda.</div>';
+ const pg=$("#photosGrid");pg.innerHTML=data.photos.length?data.photos.slice().reverse().map(p=>`<div class="photo"><img src="${p.src}" alt="${esc(p.name)}"><button onclick="delPhoto('${p.id}')">×</button></div>`).join(""):'<div class="card" style="grid-column:1/-1;color:var(--muted)">Nenhuma foto adicionada.</div>';
+}
+render();
+
+window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();deferredPrompt=e;$("#installBtn").hidden=false});
+$("#installBtn").onclick=async()=>{if(!deferredPrompt){toast("No Chrome, use ⋮ > Instalar aplicativo.");return}deferredPrompt.prompt();await deferredPrompt.userChoice;deferredPrompt=null;$("#installBtn").hidden=true};
+window.addEventListener("appinstalled",()=>toast("Aplicativo instalado!"));
+if("serviceWorker"in navigator)navigator.serviceWorker.register("sw.js").catch(console.error);
