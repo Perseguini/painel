@@ -1,4 +1,4 @@
-const CACHE = "devclub-study-pro-v5";
+const CACHE = "devclub-study-pro-v6";
 const APP_SHELL = [
   "./",
   "./index.html",

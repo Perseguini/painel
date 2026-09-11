@@ -174,7 +174,58 @@ function render(){
 render();
 
 /* ================================== PWA ================================== */
-window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();deferredPrompt=e;$("#installBtn").hidden=false});
-$("#installBtn").onclick=async()=>{if(!deferredPrompt){toast("No Chrome, use ⋮ > Instalar aplicativo.");return}deferredPrompt.prompt();await deferredPrompt.userChoice;deferredPrompt=null;$("#installBtn").hidden=true};
-window.addEventListener("appinstalled",()=>toast("Aplicativo instalado!"));
-if("serviceWorker"in navigator)navigator.serviceWorker.register("sw.js").catch(console.error);
+const installBtn = $("#installBtn");
+
+function isAppInstalled(){
+  return window.matchMedia("(display-mode: standalone)").matches ||
+         window.navigator.standalone === true;
+}
+
+function updateInstallButton(){
+  // Mantém o botão visível no navegador mesmo quando o Chrome não dispara
+  // beforeinstallprompt. Depois de instalado, o botão some automaticamente.
+  installBtn.hidden = isAppInstalled();
+}
+
+updateInstallButton();
+
+window.addEventListener("beforeinstallprompt", e => {
+  e.preventDefault();
+  deferredPrompt = e;
+  installBtn.hidden = false;
+});
+
+installBtn.onclick = async () => {
+  if(isAppInstalled()){
+    installBtn.hidden = true;
+    toast("O aplicativo já está instalado.");
+    return;
+  }
+
+  if(deferredPrompt){
+    deferredPrompt.prompt();
+    const choice = await deferredPrompt.userChoice;
+    deferredPrompt = null;
+    if(choice.outcome === "accepted") installBtn.hidden = true;
+    return;
+  }
+
+  const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  if(isIOS){
+    toast("No Safari: Compartilhar → Adicionar à Tela de Início.");
+  }else{
+    toast("No Chrome: toque em ⋮ → Instalar aplicativo.");
+  }
+};
+
+window.addEventListener("appinstalled", () => {
+  deferredPrompt = null;
+  installBtn.hidden = true;
+  toast("Aplicativo instalado!");
+});
+
+window.matchMedia("(display-mode: standalone)").addEventListener?.("change", updateInstallButton);
+
+if("serviceWorker" in navigator){
+  navigator.serviceWorker.register("sw.js").catch(console.error);
+}
